@@ -1,0 +1,898 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fruit AI - ระบบจำแนกภาพสไตล์ผลไม้</title>
+    <!-- นำเข้า Tailwind CSS สำหรับการจัดการ Layout และ Styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- นำเข้า Google Fonts ภาษาไทย (Prompt และ Kanit) เพื่อความสวยงามและอ่านง่าย -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- นำเข้า TensorFlow.js และ Teachable Machine Image Library -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Prompt', 'Kanit', 'sans-serif'],
+                    },
+                    colors: {
+                        cream: '#FFFDF7',
+                        mango: '#FFB703',
+                        mangoLight: '#FFF3D1',
+                        watermelon: '#FF5A5F',
+                        watermelonLight: '#FFE5E6',
+                        limeFresh: '#2EC4B6',
+                        leafGreen: '#38B000',
+                        leafLight: '#E8F8E0',
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gradient-to-br from-[#FFFDF5] via-[#FFF6E5] to-[#FFEBE8] min-h-screen font-sans text-gray-800 relative overflow-x-hidden selection:bg-mango selection:text-white">
+
+    <!-- องค์ประกอบตกแต่งพื้นหลังสไตล์ผลไม้ (Floating Decorative Elements) -->
+    <div class="fixed top-6 left-6 text-4xl sm:text-5xl opacity-25 pointer-events-none select-none animate-bounce" style="animation-duration: 3s;">🍉</div>
+    <div class="fixed top-20 right-8 text-4xl sm:text-5xl opacity-25 pointer-events-none select-none animate-bounce" style="animation-duration: 4s;">🥭</div>
+    <div class="fixed bottom-10 left-10 text-4xl sm:text-5xl opacity-25 pointer-events-none select-none animate-bounce" style="animation-duration: 3.5s;">🍊</div>
+    <div class="fixed bottom-12 right-12 text-4xl sm:text-5xl opacity-25 pointer-events-none select-none animate-bounce" style="animation-duration: 4.5s;">🍓</div>
+    <div class="fixed top-1/2 left-4 text-3xl opacity-20 pointer-events-none select-none hidden md:block">🍍</div>
+    <div class="fixed top-1/3 right-6 text-3xl opacity-20 pointer-events-none select-none hidden md:block">🥝</div>
+
+    <!-- คอนเทนเนอร์หลัก -->
+    <main class="relative z-10 max-w-4xl mx-auto px-4 py-8 sm:py-12">
+        
+        <!-- ส่วนหัวของเว็บไซต์ (Header) -->
+        <header class="text-center mb-8 sm:mb-10">
+            <div class="inline-flex items-center gap-2 bg-white/80 backdrop-blur-sm border border-amber-200 px-4 py-1.5 rounded-full shadow-sm mb-4">
+                <span class="text-lg">🍑</span>
+                <span class="text-xs sm:text-sm font-medium text-amber-700 tracking-wide">AI Image Classification • สไตล์ผลไม้สดใส</span>
+            </div>
+            <h1 class="text-3xl sm:text-4xl md:text-5xl font-bold bg-gradient-to-r from-[#FF5A5F] via-[#FF8C00] to-[#38B000] bg-clip-text text-transparent pb-1">
+                ระบบวิเคราะห์ภาพอัจฉริยะ
+            </h1>
+            <p class="text-gray-600 mt-2 text-sm sm:text-base max-w-xl mx-auto">
+                อัปโหลดรูปภาพของคุณเพื่อให้ AI ช่วยทำนายและวิเคราะห์ผลลัพธ์อย่างแม่นยำ รวดเร็ว และใช้งานง่าย
+            </p>
+
+            <!-- แถบแสดงสถานะการโหลดโมเดล (Model Status Indicator) -->
+            <div id="model-status-badge" class="mt-5 inline-flex items-center gap-2.5 px-4 py-2 rounded-full bg-amber-100/90 text-amber-800 border border-amber-300 shadow-sm transition-all duration-300">
+                <svg id="model-spinner" class="animate-spin h-4 w-4 text-amber-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <span id="model-status-text" class="text-xs sm:text-sm font-medium">กำลังเตรียมความพร้อมโมเดล AI...</span>
+            </div>
+        </header>
+
+        <!-- กล่องแจ้งเตือนข้อผิดพลาดหรือข้อความระบบ (Custom Message Box แทน alert) -->
+        <div id="message-box" class="hidden mb-6 max-w-2xl mx-auto bg-red-50 border-l-4 border-[#FF5A5F] text-red-800 p-4 rounded-2xl shadow-md flex items-center justify-between transition-all">
+            <div class="flex items-center gap-3">
+                <span class="text-xl">🍓</span>
+                <p id="message-text" class="text-sm font-medium"></p>
+            </div>
+            <button onclick="hideMessage()" class="text-red-500 hover:text-red-700 font-bold px-2 py-1 rounded-lg">✕</button>
+        </div>
+
+        <!-- การ์ดเนื้อหาหลัก (Main Card) -->
+        <div class="bg-white/90 backdrop-blur-md rounded-3xl shadow-xl border border-amber-100/80 p-6 sm:p-8 md:p-10 transition-all">
+            
+            <!-- แถบสลับ 2 โหมด (Segmented Control / Tabs) -->
+            <div class="flex justify-center mb-8">
+                <div class="inline-flex p-1.5 bg-amber-100/80 border border-amber-200/80 rounded-full shadow-inner w-full max-w-md">
+                    <button type="button" id="tab-camera" onclick="switchMode('camera')"
+                            class="flex-1 py-2.5 px-4 rounded-full text-sm sm:text-base font-semibold transition-all duration-300 flex items-center justify-center gap-2 bg-gradient-to-r from-[#FF5A5F] to-[#FF8C00] text-white shadow-md cursor-pointer">
+                        <span>📸</span>
+                        <span>ถ่ายภาพจากกล้อง</span>
+                    </button>
+                    <button type="button" id="tab-upload" onclick="switchMode('upload')"
+                            class="flex-1 py-2.5 px-4 rounded-full text-sm sm:text-base font-semibold transition-all duration-300 flex items-center justify-center gap-2 text-amber-900 hover:text-[#FF5A5F] cursor-pointer">
+                        <span>🖼️</span>
+                        <span>อัปโหลดรูปภาพ</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+                
+                <!-- ฝั่งซ้าย: พื้นที่กล้อง หรือ อัปโหลดรูปภาพ -->
+                <div class="lg:col-span-6 flex flex-col items-center">
+                    
+                    <!-- ================= โหมดที่ 1: ถ่ายภาพจากกล้อง (Camera Capture) ================= -->
+                    <div id="camera-section" class="w-full flex flex-col items-center">
+                        <!-- กรอบแสดงภาพกล้องและภาพนิ่งที่ถ่าย -->
+                        <div class="w-full aspect-square max-w-sm rounded-3xl border-3 border-dashed border-amber-300 bg-gradient-to-b from-amber-50/80 to-orange-50/60 overflow-hidden relative flex flex-col items-center justify-center shadow-inner">
+                            
+                            <!-- สถานะเริ่มต้น: ยังไม่ได้เปิดกล้อง -->
+                            <div id="camera-placeholder" class="flex flex-col items-center justify-center p-6 text-center">
+                                <div class="w-20 h-20 rounded-full bg-white shadow-md flex items-center justify-center text-4xl mb-4 border border-amber-100">
+                                    📷
+                                </div>
+                                <h3 class="text-lg font-semibold text-gray-800 mb-1">พร้อมถ่ายภาพเพื่อวิเคราะห์</h3>
+                                <p class="text-xs sm:text-sm text-gray-500 max-w-xs">
+                                    กดปุ่ม <span class="text-[#FF5A5F] font-semibold">"เปิดกล้อง"</span> ด้านล่างเพื่อส่องวัตถุหรือผลไม้ที่ต้องการตรวจสอบ
+                                </p>
+                            </div>
+
+                            <!-- วิดีโอภาพสดจากกล้อง (Live Preview) -->
+                            <video id="camera-video" autoplay playsinline muted class="hidden w-full h-full object-cover"></video>
+
+                            <!-- ภาพนิ่งที่กดถ่าย (Snapshot Canvas / Image) -->
+                            <canvas id="camera-canvas" class="hidden"></canvas>
+                            <img id="captured-image" src="" alt="ภาพที่ถ่ายจากกล้อง" class="hidden w-full h-full object-contain bg-white/80" />
+
+                            <!-- ปุ่มสลับกล้องหน้า/หลัง (แสดงมุมขวาบนเมื่อเปิดกล้องอยู่) -->
+                            <button type="button" id="flip-camera-btn" onclick="toggleCameraFacing()"
+                                    class="hidden absolute top-3 right-3 bg-black/55 hover:bg-black/75 backdrop-blur-md text-white p-2.5 rounded-full shadow-md transition-all cursor-pointer"
+                                    title="สลับกล้องหน้า / กล้องหลัง">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                </svg>
+                            </button>
+
+                            <!-- ป้ายกำกับสถานะ Live / Snapshot -->
+                            <div id="camera-badge" class="hidden absolute bottom-3 left-3 bg-black/60 backdrop-blur-sm text-white text-xs px-3 py-1 rounded-full flex items-center gap-1.5">
+                                <span id="camera-badge-dot" class="w-2 h-2 rounded-full bg-red-500 animate-ping"></span>
+                                <span id="camera-badge-text">ภาพสดจากกล้อง</span>
+                            </div>
+                        </div>
+
+                        <!-- ปุ่มควบคุมกล้อง -->
+                        <div class="mt-6 flex flex-wrap items-center justify-center gap-3 w-full max-w-sm">
+                            <!-- ปุ่มเปิดกล้อง -->
+                            <button type="button" id="start-camera-btn" onclick="startCamera()"
+                                    class="flex-1 min-w-[160px] bg-gradient-to-r from-[#FF5A5F] to-[#FF8C00] hover:from-[#ff474d] hover:to-[#f57c00] text-white font-semibold py-3.5 px-6 rounded-full shadow-lg shadow-orange-200 hover:shadow-orange-300 transform hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                </svg>
+                                <span>เปิดกล้อง</span>
+                            </button>
+
+                            <!-- ปุ่มกดถ่ายภาพ (Capture) -->
+                            <button type="button" id="capture-btn" onclick="capturePhoto()"
+                                    class="hidden flex-1 min-w-[160px] bg-gradient-to-r from-[#38B000] to-[#2EC4B6] hover:from-[#2f9600] hover:to-[#25a99d] text-white font-semibold py-3.5 px-6 rounded-full shadow-lg shadow-green-200 hover:shadow-green-300 transform hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                                </svg>
+                                <span>กดถ่ายภาพ</span>
+                            </button>
+
+                            <!-- ปุ่มปิดกล้อง (ขณะเปิดกล้องอยู่) -->
+                            <button type="button" id="stop-camera-btn" onclick="stopCamera(true)"
+                                    class="hidden bg-red-50 hover:bg-red-100 text-[#FF5A5F] border border-red-200 font-semibold py-3.5 px-4 rounded-full shadow-xs transition-all duration-200 flex items-center justify-center gap-1.5 cursor-pointer"
+                                    title="ปิดกล้อง">
+                                <span>ปิดกล้อง</span>
+                            </button>
+
+                            <!-- ปุ่มถ่ายใหม่ (Retake) -->
+                            <button type="button" id="retake-btn" onclick="retakePhoto()"
+                                    class="hidden flex-1 min-w-[160px] bg-gradient-to-r from-[#FFB703] to-[#FB8500] hover:from-[#f0aa00] hover:to-[#e57800] text-white font-semibold py-3.5 px-6 rounded-full shadow-lg shadow-amber-200 transform hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                </svg>
+                                <span>ถ่ายใหม่</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- ================= โหมดที่ 2: อัปโหลดรูปภาพ 1 ภาพ (Upload 1 Image) ================= -->
+                    <div id="upload-section" class="hidden w-full flex flex-col items-center">
+                        <!-- Input File ที่ซ่อนไว้ -->
+                        <input type="file" id="image-upload" accept="image/*" class="hidden" onchange="handleImageUpload(event)">
+
+                        <!-- พื้นที่ Drag & Drop / คลิกเพื่ออัปโหลด -->
+                        <div id="drop-zone" 
+                             onclick="triggerFileInput()" 
+                             class="w-full aspect-square max-w-sm rounded-3xl border-3 border-dashed border-amber-300 bg-gradient-to-b from-amber-50/70 to-orange-50/50 hover:from-amber-100/70 hover:to-orange-100/60 hover:border-[#FF5A5F] transition-all duration-300 cursor-pointer flex flex-col items-center justify-center p-6 text-center relative overflow-hidden group shadow-inner">
+                            
+                            <!-- สถานะเริ่มต้น: ยังไม่ได้อัปโหลดภาพ -->
+                            <div id="upload-placeholder" class="flex flex-col items-center justify-center transition-transform duration-300 group-hover:scale-105">
+                                <div class="w-20 h-20 rounded-full bg-white shadow-md flex items-center justify-center text-4xl mb-4 border border-amber-100">
+                                    🧺
+                                </div>
+                                <h3 class="text-lg font-semibold text-gray-800 mb-1">วางรูปภาพที่นี่ หรือคลิกเพื่อเลือก</h3>
+                                <p class="text-xs sm:text-sm text-gray-500 max-w-xs">
+                                    รองรับไฟล์รูปภาพ JPG, PNG, WEBP (เลือกได้ครั้งละ 1 ภาพ)
+                                </p>
+                                <span class="mt-4 inline-flex items-center gap-1.5 text-xs font-medium text-[#FF5A5F] bg-red-50 px-3 py-1 rounded-full">
+                                    <span>✨</span> พร้อมวิเคราะห์ทันที
+                                </span>
+                            </div>
+
+                            <!-- สถานะแสดงตัวอย่างภาพที่อัปโหลด (Image Preview) -->
+                            <div id="preview-wrapper" class="hidden w-full h-full flex items-center justify-center relative">
+                                <img id="image-preview" src="" alt="ภาพที่อัปโหลด" class="w-full h-full object-contain rounded-2xl shadow-sm bg-white/60" />
+                                <div class="absolute bottom-2 right-2 bg-black/60 backdrop-blur-sm text-white text-xs px-3 py-1 rounded-full">
+                                    คลิกเพื่อเปลี่ยนภาพ
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- ปุ่มควบคุมการอัปโหลดและวิเคราะห์ซ้ำ -->
+                        <div class="mt-6 flex flex-wrap items-center justify-center gap-3 w-full max-w-sm">
+                            <button type="button" 
+                                    onclick="triggerFileInput()" 
+                                    class="flex-1 min-w-[160px] bg-gradient-to-r from-[#FF5A5F] to-[#FF8C00] hover:from-[#ff474d] hover:to-[#f57c00] text-white font-semibold py-3.5 px-6 rounded-full shadow-lg shadow-orange-200 hover:shadow-orange-300 transform hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                                </svg>
+                                <span id="upload-btn-text">อัปโหลดรูปภาพ</span>
+                            </button>
+
+                            <button type="button" 
+                                    id="reanalyze-btn"
+                                    onclick="predictUploadedImage()" 
+                                    class="hidden bg-leafLight hover:bg-green-200 text-leafGreen border border-green-300 font-semibold py-3.5 px-5 rounded-full shadow-sm transition-all duration-200 flex items-center justify-center gap-1.5 cursor-pointer"
+                                    title="วิเคราะห์ภาพนี้อีกครั้ง">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                </svg>
+                                <span>วิเคราะห์ใหม่</span>
+                            </button>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- ฝั่งขวา: ส่วนแสดงผลการวิเคราะห์ (Prediction Results) -->
+                <div class="lg:col-span-6 flex flex-col justify-between h-full">
+                    <div class="bg-cream rounded-3xl p-6 border border-amber-100 shadow-sm h-full flex flex-col">
+                        <div class="flex items-center justify-between border-b border-amber-100 pb-4 mb-5">
+                            <div class="flex items-center gap-2">
+                                <span class="text-2xl">🍹</span>
+                                <h2 class="text-lg sm:text-xl font-bold text-gray-800">ผลการวิเคราะห์จาก AI</h2>
+                            </div>
+                            <span class="text-xs font-medium bg-amber-100 text-amber-800 px-3 py-1 rounded-full">
+                                Teachable Machine
+                            </span>
+                        </div>
+
+                        <!-- สถานะรอการถ่ายภาพหรืออัปโหลดภาพ -->
+                        <div id="result-empty-state" class="flex-1 flex flex-col items-center justify-center text-center py-10 px-4">
+                            <div class="text-5xl mb-3 opacity-80">🍍</div>
+                            <p class="text-gray-600 font-medium">ยังไม่มีข้อมูลการวิเคราะห์</p>
+                            <p id="empty-state-hint" class="text-xs sm:text-sm text-gray-400 mt-1">
+                                กรุณากดปุ่ม <span class="text-[#FF5A5F] font-semibold">"เปิดกล้อง"</span> แล้วกดถ่ายภาพ หรือสลับไปโหมดอัปโหลดรูปภาพ
+                            </p>
+                        </div>
+
+                        <!-- สถานะกำลังประมวลผลภาพ -->
+                        <div id="result-loading-state" class="hidden flex-1 flex flex-col items-center justify-center text-center py-10">
+                            <div class="w-12 h-12 border-4 border-amber-200 border-t-[#FF5A5F] rounded-full animate-spin mb-4"></div>
+                            <p class="text-gray-700 font-medium">กำลังวิเคราะห์รูปภาพของคุณ...</p>
+                            <p class="text-xs text-gray-400 mt-1">โปรดรอสักครู่ AI กำลังประมวลผล</p>
+                        </div>
+
+                        <!-- สถานะแสดงผลลัพธ์การทำนาย -->
+                        <div id="result-content" class="hidden space-y-5">
+                            <!-- การ์ดไฮไลท์ผลลัพธ์อันดับ 1 (Top Prediction Highlight) -->
+                            <div class="bg-gradient-to-r from-[#FFF3D1] via-[#FFE8D6] to-[#FFE5E6] border border-amber-200 rounded-2xl p-4 sm:p-5 shadow-sm relative overflow-hidden">
+                                <div class="absolute -right-3 -bottom-3 text-6xl opacity-15 pointer-events-none">🏆</div>
+                                <div class="flex items-center justify-between gap-2 mb-1">
+                                    <span class="inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-amber-800 bg-white/80 px-2.5 py-0.5 rounded-full">
+                                        <span>🌟</span> ผลลัพธ์ที่ตรงที่สุด
+                                    </span>
+                                    <span id="top-confidence-badge" class="text-sm sm:text-base font-bold text-[#FF5A5F] bg-white px-3 py-0.5 rounded-full shadow-xs">
+                                        0.0%
+                                    </span>
+                                </div>
+                                <h3 id="top-class-name" class="text-2xl sm:text-3xl font-bold text-gray-900 mt-2 break-words">
+                                    -
+                                </h3>
+                            </div>
+
+                            <!-- รายการความน่าจะเป็นของทุกคลาส (All Classes Progress Bars) -->
+                            <div>
+                                <h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
+                                    รายละเอียดความน่าจะเป็นทั้งหมด
+                                </h4>
+                                <div id="label-container" class="space-y-3.5">
+                                    <!-- แถบแสดงผลแต่ละคลาสจะถูกสร้างด้วย JavaScript -->
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- ส่วนท้ายเว็บไซต์ (Footer) -->
+        <footer class="text-center mt-8 text-xs sm:text-sm text-gray-500">
+            <p>ขับเคลื่อนด้วย <span class="font-semibold text-gray-700">TensorFlow.js</span> &amp; <span class="font-semibold text-gray-700">Teachable Machine</span> 🍊 สดใสทุกการวิเคราะห์</p>
+        </footer>
+    </main>
+
+    <script type="text/javascript">
+        // ลิงก์โมเดลจาก Teachable Machine
+        const URL = "https://teachablemachine.withgoogle.com/models/obAX6Snht/";
+
+        let model, maxPredictions;
+        let isModelLoaded = false;
+
+        // ตัวแปรจัดการโหมดและการใช้งานกล้อง
+        let currentMode = "camera"; // 'camera' | 'upload'
+        let mediaStream = null;
+        let currentFacingMode = "environment"; // เริ่มต้นใช้กล้องหลัง (หากไม่มีจะ fallback อัตโนมัติ)
+        let hasMultipleCameras = false;
+
+        // ชุดสีสไตล์ผลไม้สำหรับแถบ Progress Bar ของแต่ละคลาส
+        const fruitBarThemes = [
+            { bg: "bg-gradient-to-r from-[#FF5A5F] to-[#FF8A8E]", text: "text-[#FF5A5F]", light: "bg-red-100", icon: "🍉" },
+            { bg: "bg-gradient-to-r from-[#FFB703] to-[#FFD166]", text: "text-amber-600", light: "bg-amber-100", icon: "🥭" },
+            { bg: "bg-gradient-to-r from-[#38B000] to-[#70E000]", text: "text-green-600", light: "bg-green-100", icon: "🍏" },
+            { bg: "bg-gradient-to-r from-[#FB8500] to-[#FFB703]", text: "text-orange-600", light: "bg-orange-100", icon: "🍊" },
+            { bg: "bg-gradient-to-r from-[#9B5DE5] to-[#F15BB5]", text: "text-purple-600", light: "bg-purple-100", icon: "🍇" }
+        ];
+
+        // ฟังก์ชันแสดงข้อความแจ้งเตือนแบบสวยงามแทน alert()
+        function showMessage(msg) {
+            const box = document.getElementById("message-box");
+            const text = document.getElementById("message-text");
+            text.textContent = msg;
+            box.classList.remove("hidden");
+        }
+
+        function hideMessage() {
+            document.getElementById("message-box").classList.add("hidden");
+        }
+
+        // โหลดโมเดลทันทีเมื่อเปิดหน้าเว็บ
+        async function loadModel() {
+            const statusBadge = document.getElementById("model-status-badge");
+            const statusText = document.getElementById("model-status-text");
+            const spinner = document.getElementById("model-spinner");
+
+            try {
+                const modelURL = URL + "model.json";
+                const metadataURL = URL + "metadata.json";
+
+                model = await tmImage.load(modelURL, metadataURL);
+                maxPredictions = model.getTotalClasses();
+                isModelLoaded = true;
+
+                // อัปเดตสถานะเมื่อโหลดโมเดลสำเร็จ
+                spinner.classList.add("hidden");
+                statusBadge.className = "mt-5 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-leafLight text-leafGreen border border-green-300 shadow-sm transition-all duration-300";
+                statusText.innerHTML = "✅ โมเดล AI พร้อมใช้งานแล้ว! ถ่ายภาพหรืออัปโหลดได้เลย";
+            } catch (error) {
+                console.error("เกิดข้อผิดพลาดในการโหลดโมเดล:", error);
+                spinner.classList.add("hidden");
+                statusBadge.className = "mt-5 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-red-100 text-red-700 border border-red-300 shadow-sm";
+                statusText.innerHTML = "❌ โหลดโมเดลไม่สำเร็จ กรุณารีเฟรชหน้าเว็บ";
+                showMessage("ไม่สามารถเชื่อมต่อกับโมเดล Teachable Machine ได้ กรุณาตรวจสอบการเชื่อมต่ออินเทอร์เน็ต");
+            }
+        }
+
+        // รีเซ็ตการแสดงผลลัพธ์ด้านขวาให้กลับสู่สถานะว่าง
+        function resetResultsUI() {
+            document.getElementById("result-content").classList.add("hidden");
+            document.getElementById("result-loading-state").classList.add("hidden");
+            document.getElementById("result-empty-state").classList.remove("hidden");
+
+            const hint = document.getElementById("empty-state-hint");
+            if (currentMode === "camera") {
+                hint.innerHTML = 'กรุณากดปุ่ม <span class="text-[#FF5A5F] font-semibold">"เปิดกล้อง"</span> แล้วกดถ่ายภาพเพื่อวิเคราะห์ผล';
+            } else {
+                hint.innerHTML = 'กรุณากดปุ่ม <span class="text-[#FF5A5F] font-semibold">"อัปโหลดรูปภาพ"</span> ทางด้านซ้ายเพื่อเริ่มต้นดูผลลัพธ์';
+            }
+        }
+
+        // ==========================================
+        // ระบบสลับ 2 โหมด (Camera <-> Upload)
+        // ==========================================
+        function switchMode(mode) {
+            if (currentMode === mode) return;
+            hideMessage();
+            currentMode = mode;
+
+            const tabCamera = document.getElementById("tab-camera");
+            const tabUpload = document.getElementById("tab-upload");
+            const cameraSection = document.getElementById("camera-section");
+            const uploadSection = document.getElementById("upload-section");
+
+            const activeTabClass = "flex-1 py-2.5 px-4 rounded-full text-sm sm:text-base font-semibold transition-all duration-300 flex items-center justify-center gap-2 bg-gradient-to-r from-[#FF5A5F] to-[#FF8C00] text-white shadow-md cursor-pointer";
+            const inactiveTabClass = "flex-1 py-2.5 px-4 rounded-full text-sm sm:text-base font-semibold transition-all duration-300 flex items-center justify-center gap-2 text-amber-900 hover:text-[#FF5A5F] cursor-pointer";
+
+            if (mode === "camera") {
+                tabCamera.className = activeTabClass;
+                tabUpload.className = inactiveTabClass;
+                uploadSection.classList.add("hidden");
+                cameraSection.classList.remove("hidden");
+                resetResultsUI();
+            } else {
+                tabUpload.className = activeTabClass;
+                tabCamera.className = inactiveTabClass;
+                cameraSection.classList.add("hidden");
+                uploadSection.classList.remove("hidden");
+
+                // ปิดกล้องทันทีเมื่อสลับไปโหมดอัปโหลด เพื่อประหยัดแบตเตอรี่และคืนสิทธิ์กล้อง
+                stopCamera(true);
+                resetResultsUI();
+            }
+        }
+
+        // ==========================================
+        // โหมดที่ 1: ถ่ายภาพจากกล้อง (Camera Capture)
+        // ==========================================
+        async function checkCameraDevices() {
+            try {
+                if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const videoInputs = devices.filter(device => device.kind === "videoinput");
+                hasMultipleCameras = videoInputs.length > 1;
+            } catch (e) {
+                hasMultipleCameras = false;
+            }
+        }
+
+        async function startCamera() {
+            hideMessage();
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                showMessage("เบราว์เซอร์ของคุณไม่รองรับการใช้งานกล้อง กรุณาลองใช้โหมดอัปโหลดรูปภาพแทน");
+                return;
+            }
+
+            // หยุดสตรีมเดิมก่อนหากเปิดค้างไว้
+            stopCamera(false);
+
+            try {
+                // พยายามเปิดกล้องตาม facingMode ที่เลือกไว้
+                const constraints = {
+                    video: {
+                        facingMode: { ideal: currentFacingMode },
+                        width: { ideal: 640 },
+                        height: { ideal: 640 }
+                    },
+                    audio: false
+                };
+
+                mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+                await checkCameraDevices();
+
+                const videoElement = document.getElementById("camera-video");
+                videoElement.srcObject = mediaStream;
+                await videoElement.play();
+
+                // อัปเดต UI แสดงภาพสดจากกล้อง
+                document.getElementById("camera-placeholder").classList.add("hidden");
+                document.getElementById("captured-image").classList.add("hidden");
+                videoElement.classList.remove("hidden");
+
+                // สะท้อนภาพแนวนอนเฉพาะกล้องหน้า (user) เพื่อให้ดูเป็นธรรมชาติ
+                if (currentFacingMode === "user") {
+                    videoElement.classList.add("scale-x-[-1]");
+                } else {
+                    videoElement.classList.remove("scale-x-[-1]");
+                }
+
+                // แสดงปุ่มสลับกล้องหากอุปกรณ์มีหลายกล้อง (เช่น มือถือ/แท็บเล็ต)
+                const flipBtn = document.getElementById("flip-camera-btn");
+                if (hasMultipleCameras) {
+                    flipBtn.classList.remove("hidden");
+                } else {
+                    flipBtn.classList.add("hidden");
+                }
+
+                // แสดงป้ายสถานะ Live
+                const badge = document.getElementById("camera-badge");
+                const badgeDot = document.getElementById("camera-badge-dot");
+                const badgeText = document.getElementById("camera-badge-text");
+                badge.classList.remove("hidden");
+                badgeDot.className = "w-2 h-2 rounded-full bg-red-500 animate-ping";
+                badgeText.textContent = "ภาพสดจากกล้อง";
+
+                // สลับปุ่มควบคุม
+                document.getElementById("start-camera-btn").classList.add("hidden");
+                document.getElementById("retake-btn").classList.add("hidden");
+                document.getElementById("capture-btn").classList.remove("hidden");
+                document.getElementById("stop-camera-btn").classList.remove("hidden");
+
+                resetResultsUI();
+            } catch (error) {
+                console.error("ไม่สามารถเปิดกล้องได้:", error);
+                showMessage("ไม่สามารถเข้าถึงกล้องได้ กรุณาอนุญาตสิทธิ์การใช้กล้องในเบราว์เซอร์ หรือเปลี่ยนไปใช้โหมดอัปโหลดรูปภาพ");
+            }
+        }
+
+        // สลับกล้องหน้า / กล้องหลัง
+        async function toggleCameraFacing() {
+            currentFacingMode = currentFacingMode === "environment" ? "user" : "environment";
+            await startCamera();
+        }
+
+        // หยุดการทำงานของ MediaStream (ปิดกล้อง)
+        function stopCamera(resetUI = true) {
+            if (mediaStream) {
+                mediaStream.getTracks().forEach(track => track.stop());
+                mediaStream = null;
+            }
+
+            const videoElement = document.getElementById("camera-video");
+            if (videoElement) {
+                videoElement.pause();
+                videoElement.srcObject = null;
+            }
+
+            if (resetUI) {
+                videoElement.classList.add("hidden");
+                document.getElementById("captured-image").classList.add("hidden");
+                document.getElementById("camera-placeholder").classList.remove("hidden");
+                document.getElementById("flip-camera-btn").classList.add("hidden");
+                document.getElementById("camera-badge").classList.add("hidden");
+
+                document.getElementById("capture-btn").classList.add("hidden");
+                document.getElementById("stop-camera-btn").classList.add("hidden");
+                document.getElementById("retake-btn").classList.add("hidden");
+                document.getElementById("start-camera-btn").classList.remove("hidden");
+            }
+        }
+
+        // กดถ่ายภาพนิ่ง (Snapshot) และส่งวิเคราะห์ผลทันที
+        async function capturePhoto() {
+            const videoElement = document.getElementById("camera-video");
+            const canvas = document.getElementById("camera-canvas");
+            const capturedImg = document.getElementById("captured-image");
+
+            if (!videoElement || videoElement.readyState < 2) {
+                showMessage("กล้องยังไม่พร้อมสำหรับการถ่ายภาพ กรุณารอสักครู่");
+                return;
+            }
+
+            // ตั้งค่าขนาด Canvas ให้ตรงกับสัดส่วนวิดีโอจริง
+            const width = videoElement.videoWidth;
+            const height = videoElement.videoHeight;
+            canvas.width = width;
+            canvas.height = height;
+
+            const ctx = canvas.getContext("2d");
+            ctx.save();
+            // หากเป็นกล้องหน้า ให้กลับภาพซ้ายขวาให้ตรงกับที่ผู้ใช้เห็นบนหน้าจอ
+            if (currentFacingMode === "user") {
+                ctx.translate(width, 0);
+                ctx.scale(-1, 1);
+            }
+            ctx.drawImage(videoElement, 0, 0, width, height);
+            ctx.restore();
+
+            // แปลงภาพจาก Canvas เป็น Data URL เพื่อแสดงตัวอย่างและส่งเข้าโมเดล
+            const imageDataUrl = canvas.toDataURL("image/png");
+
+            // หยุดสตรีมกล้องชั่วคราวหลังถ่ายภาพเพื่อประหยัดพลังงาน
+            stopCamera(false);
+
+            capturedImg.onload = async function() {
+                videoElement.classList.add("hidden");
+                document.getElementById("flip-camera-btn").classList.add("hidden");
+                capturedImg.classList.remove("hidden");
+
+                // อัปเดตป้ายสถานะเป็นภาพที่ถ่าย
+                const badge = document.getElementById("camera-badge");
+                const badgeDot = document.getElementById("camera-badge-dot");
+                const badgeText = document.getElementById("camera-badge-text");
+                badge.classList.remove("hidden");
+                badgeDot.className = "w-2 h-2 rounded-full bg-amber-400";
+                badgeText.textContent = "ภาพที่ถ่าย";
+
+                // เปลี่ยนปุ่มเป็น "ถ่ายใหม่"
+                document.getElementById("capture-btn").classList.add("hidden");
+                document.getElementById("stop-camera-btn").classList.add("hidden");
+                document.getElementById("start-camera-btn").classList.add("hidden");
+                document.getElementById("retake-btn").classList.remove("hidden");
+
+                // วิเคราะห์ภาพที่ถ่ายทันที
+                await runPredictionOnElement(capturedImg);
+            };
+
+            capturedImg.src = imageDataUrl;
+        }
+
+        // กดปุ่ม "ถ่ายใหม่" เพื่อเปิดกล้องกลับมาอีกครั้ง
+        async function retakePhoto() {
+            resetResultsUI();
+            await startCamera();
+        }
+
+        // ==========================================
+        // โหมดที่ 2: อัปโหลดรูปภาพ 1 ภาพ (Upload 1 Image)
+        // ==========================================
+        function triggerFileInput() {
+            document.getElementById("image-upload").click();
+        }
+
+        function handleImageUpload(event) {
+            hideMessage();
+            const file = event.target.files[0];
+            if (!file) return;
+
+            processFile(file);
+        }
+
+        function processFile(file) {
+            if (!file.type.startsWith("image/")) {
+                showMessage("กรุณาเลือกไฟล์รูปภาพเท่านั้น (เช่น JPG, PNG, WEBP)");
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const imgElement = document.getElementById("image-preview");
+                const placeholder = document.getElementById("upload-placeholder");
+                const previewWrapper = document.getElementById("preview-wrapper");
+                const uploadBtnText = document.getElementById("upload-btn-text");
+                const reanalyzeBtn = document.getElementById("reanalyze-btn");
+
+                document.getElementById("result-empty-state").classList.add("hidden");
+                document.getElementById("result-content").classList.add("hidden");
+                document.getElementById("result-loading-state").classList.remove("hidden");
+
+                imgElement.onload = async function() {
+                    placeholder.classList.add("hidden");
+                    previewWrapper.classList.remove("hidden");
+                    uploadBtnText.textContent = "เปลี่ยนรูปภาพ";
+                    reanalyzeBtn.classList.remove("hidden");
+
+                    await runPredictionOnElement(imgElement);
+                };
+
+                imgElement.src = e.target.result;
+            };
+
+            reader.onerror = function() {
+                showMessage("เกิดข้อผิดพลาดในการอ่านไฟล์รูปภาพ กรุณาลองใหม่อีกครั้ง");
+            };
+
+            reader.readAsDataURL(file);
+        }
+
+        async function predictUploadedImage() {
+            const imgElement = document.getElementById("image-preview");
+            if (imgElement && imgElement.src) {
+                await runPredictionOnElement(imgElement);
+            }
+        }
+
+        // ==========================================
+        // ฟังก์ชันกลางสำหรับส่งภาพเข้าโมเดล Teachable Machine
+        // ==========================================
+        async function runPredictionOnElement(imageElement) {
+            if (!isModelLoaded || !model) {
+                showMessage("โมเดล AI ยังโหลดไม่เสร็จ กรุณารอสักครู่แล้วลองใหม่อีกครั้ง");
+                return;
+            }
+
+            if (!imageElement || !imageElement.src) return;
+
+            try {
+                document.getElementById("result-empty-state").classList.add("hidden");
+                document.getElementById("result-content").classList.add("hidden");
+                document.getElementById("result-loading-state").classList.remove("hidden");
+
+                // สั่งให้โมเดลทำนายภาพจาก Element <img>
+                const prediction = await model.predict(imageElement);
+
+                // เรียงลำดับผลลัพธ์จากความน่าจะเป็นมากไปน้อย
+                const sortedPredictions = [...prediction].sort((a, b) => b.probability - a.probability);
+
+                // แสดงผลลัพธ์อันดับ 1 ในการ์ดไฮไลท์
+                const topResult = sortedPredictions[0];
+                const topPercentage = (topResult.probability * 100).toFixed(1) + "%";
+                document.getElementById("top-class-name").textContent = topResult.className;
+                document.getElementById("top-confidence-badge").textContent = topPercentage;
+
+                // สร้างแถบ Progress Bar สำหรับทุกคลาส
+                const labelContainer = document.getElementById("label-container");
+                labelContainer.innerHTML = "";
+
+                sortedPredictions.forEach((item, index) => {
+                    const percentageValue = (item.probability * 100).toFixed(1);
+                    const theme = fruitBarThemes[index % fruitBarThemes.length];
+
+                    const itemWrapper = document.createElement("div");
+                    itemWrapper.className = "bg-white p-3.5 rounded-2xl border border-amber-100/80 shadow-2xs transition-all";
+
+                    itemWrapper.innerHTML = `
+                        <div class="flex items-center justify-between mb-1.5">
+                            <div class="flex items-center gap-2">
+                                <span class="text-base">${theme.icon}</span>
+                                <span class="font-semibold text-sm sm:text-base text-gray-800">${item.className}</span>
+                            </div>
+                            <span class="font-bold text-sm ${theme.text}">${percentageValue}%</span>
+                        </div>
+                        <div class="w-full ${theme.light} rounded-full h-3 overflow-hidden">
+                            <div class="${theme.bg} h-3 rounded-full transition-all duration-700 ease-out" style="width: ${percentageValue}%"></div>
+                        </div>
+                    `;
+
+                    labelContainer.appendChild(itemWrapper);
+                });
+
+                // ซ่อนสถานะโหลด และแสดงผลลัพธ์
+                document.getElementById("result-loading-state").classList.add("hidden");
+                document.getElementById("result-content").classList.remove("hidden");
+
+            } catch (error) {
+                console.error("เกิดข้อผิดพลาดระหว่างการวิเคราะห์:", error);
+                document.getElementById("result-loading-state").classList.add("hidden");
+                document.getElementById("result-empty-state").classList.remove("hidden");
+                showMessage("เกิดข้อผิดพลาดในการวิเคราะห์รูปภาพ กรุณาลองใหม่อีกครั้ง");
+            }
+        }
+
+        // เปิดหน้าต่างเลือกไฟล์เมื่อกดปุ่มหรือพื้นที่อัปโหลด
+        function triggerFileInput() {
+            document.getElementById("image-upload").click();
+        }
+
+        // จัดการเมื่อมีการเลือกไฟล์รูปภาพ
+        function handleImageUpload(event) {
+            hideMessage();
+            const file = event.target.files[0];
+            if (!file) return;
+
+            processFile(file);
+        }
+
+        // อ่านไฟล์รูปภาพ แสดงตัวอย่าง และสั่งวิเคราะห์ผล
+        function processFile(file) {
+            // ตรวจสอบว่าเป็นไฟล์รูปภาพหรือไม่
+            if (!file.type.startsWith("image/")) {
+                showMessage("กรุณาเลือกไฟล์รูปภาพเท่านั้น (เช่น JPG, PNG, WEBP)");
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const imgElement = document.getElementById("image-preview");
+                const placeholder = document.getElementById("upload-placeholder");
+                const previewWrapper = document.getElementById("preview-wrapper");
+                const uploadBtnText = document.getElementById("upload-btn-text");
+                const reanalyzeBtn = document.getElementById("reanalyze-btn");
+
+                // แสดงสถานะกำลังโหลดผลลัพธ์
+                document.getElementById("result-empty-state").classList.add("hidden");
+                document.getElementById("result-content").classList.add("hidden");
+                document.getElementById("result-loading-state").classList.remove("hidden");
+
+                // เมื่อรูปภาพโหลดเข้าสู่ DOM เสร็จสมบูรณ์ จึงทำการทำนายผล
+                imgElement.onload = async function() {
+                    placeholder.classList.add("hidden");
+                    previewWrapper.classList.remove("hidden");
+                    uploadBtnText.textContent = "เปลี่ยนรูปภาพ";
+                    reanalyzeBtn.classList.remove("hidden");
+
+                    await predictImage();
+                };
+
+                imgElement.src = e.target.result;
+            };
+
+            reader.onerror = function() {
+                showMessage("เกิดข้อผิดพลาดในการอ่านไฟล์รูปภาพ กรุณาลองใหม่อีกครั้ง");
+            };
+
+            reader.readAsDataURL(file);
+        }
+
+        // ฟังก์ชันทำนายผลจากรูปภาพที่อัปโหลด
+        async function predictImage() {
+            if (!isModelLoaded || !model) {
+                showMessage("โมเดล AI ยังโหลดไม่เสร็จ กรุณารอสักครู่แล้วกดปุ่ม 'วิเคราะห์ใหม่'");
+                return;
+            }
+
+            const imgElement = document.getElementById("image-preview");
+            if (!imgElement || !imgElement.src) return;
+
+            try {
+                // แสดงตัวโหลดระหว่างวิเคราะห์
+                document.getElementById("result-empty-state").classList.add("hidden");
+                document.getElementById("result-content").classList.add("hidden");
+                document.getElementById("result-loading-state").classList.remove("hidden");
+
+                // สั่งให้โมเดลทำนายภาพจาก Element <img>
+                const prediction = await model.predict(imgElement);
+
+                // เรียงลำดับผลลัพธ์จากความน่าจะเป็นมากไปน้อย
+                const sortedPredictions = [...prediction].sort((a, b) => b.probability - a.probability);
+
+                // แสดงผลลัพธ์อันดับ 1 ในการ์ดไฮไลท์
+                const topResult = sortedPredictions[0];
+                const topPercentage = (topResult.probability * 100).toFixed(1) + "%";
+                document.getElementById("top-class-name").textContent = topResult.className;
+                document.getElementById("top-confidence-badge").textContent = topPercentage;
+
+                // สร้างแถบ Progress Bar สำหรับทุกคลาส
+                const labelContainer = document.getElementById("label-container");
+                labelContainer.innerHTML = "";
+
+                sortedPredictions.forEach((item, index) => {
+                    const percentageValue = (item.probability * 100).toFixed(1);
+                    const theme = fruitBarThemes[index % fruitBarThemes.length];
+
+                    const itemWrapper = document.createElement("div");
+                    itemWrapper.className = "bg-white p-3.5 rounded-2xl border border-amber-100/80 shadow-2xs transition-all";
+
+                    itemWrapper.innerHTML = `
+                        <div class="flex items-center justify-between mb-1.5">
+                            <div class="flex items-center gap-2">
+                                <span class="text-base">${theme.icon}</span>
+                                <span class="font-semibold text-sm sm:text-base text-gray-800">${item.className}</span>
+                            </div>
+                            <span class="font-bold text-sm ${theme.text}">${percentageValue}%</span>
+                        </div>
+                        <div class="w-full ${theme.light} rounded-full h-3 overflow-hidden">
+                            <div class="${theme.bg} h-3 rounded-full transition-all duration-700 ease-out" style="width: ${percentageValue}%"></div>
+                        </div>
+                    `;
+
+                    labelContainer.appendChild(itemWrapper);
+                });
+
+                // ซ่อนสถานะโหลด และแสดงผลลัพธ์
+                document.getElementById("result-loading-state").classList.add("hidden");
+                document.getElementById("result-content").classList.remove("hidden");
+
+            } catch (error) {
+                console.error("เกิดข้อผิดพลาดระหว่างการวิเคราะห์:", error);
+                document.getElementById("result-loading-state").classList.add("hidden");
+                document.getElementById("result-empty-state").classList.remove("hidden");
+                showMessage("เกิดข้อผิดพลาดในการวิเคราะห์รูปภาพ กรุณาลองอัปโหลดภาพใหม่อีกครั้ง");
+            }
+        }
+
+        // ตั้งค่า Drag and Drop สำหรับพื้นที่อัปโหลดภาพ
+        function setupDragAndDrop() {
+            const dropZone = document.getElementById("drop-zone");
+
+            ["dragenter", "dragover", "dragleave", "drop"].forEach(eventName => {
+                dropZone.addEventListener(eventName, (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }, false);
+            });
+
+            ["dragenter", "dragover"].forEach(eventName => {
+                dropZone.addEventListener(eventName, () => {
+                    dropZone.classList.add("border-[#FF5A5F]", "bg-amber-100/80", "scale-[1.01]");
+                }, false);
+            });
+
+            ["dragleave", "drop"].forEach(eventName => {
+                dropZone.addEventListener(eventName, () => {
+                    dropZone.classList.remove("border-[#FF5A5F]", "bg-amber-100/80", "scale-[1.01]");
+                }, false);
+            });
+
+            dropZone.addEventListener("drop", (e) => {
+                const dt = e.dataTransfer;
+                const files = dt.files;
+                if (files && files.length > 0) {
+                    hideMessage();
+                    processFile(files[0]);
+                }
+            }, false);
+        }
+
+        // เริ่มต้นทำงานเมื่อโหลดหน้าเว็บเสร็จสมบูรณ์
+        window.addEventListener("DOMContentLoaded", () => {
+            setupDragAndDrop();
+            loadModel();
+        });
+
+        // ปิดกล้องอัตโนมัติเมื่อปิดหน้าเว็บหรือเปลี่ยนแท็บเบราว์เซอร์
+        window.addEventListener("beforeunload", () => {
+            stopCamera(false);
+        });
+    </script>
+</body>
+</html>
